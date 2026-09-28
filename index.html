@@ -8,58 +8,88 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="mark"></span>ApartmentHunt AI</div>
-  <p class="tagline">True-cost math + weighted scoring, so the "cheaper" apartment doesn't fool you.</p>
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+      </span>
+      <span class="brand-name">ApartmentHunt <em>AI</em></span>
+    </div>
+    <p class="tagline">True-cost math + weighted scoring — so the “cheaper” apartment can’t fool you.</p>
+    <span class="local-pill"><i></i>100% local · nothing leaves this browser</span>
+  </div>
 </header>
 
 <main class="layout">
-  <section class="panel" id="weights-panel">
-    <h2>What matters to you?</h2>
-    <p class="hint">Drag the sliders — rankings update instantly.</p>
+  <aside class="rail panel" id="weights-panel" aria-label="Your priorities">
+    <h2>Your priorities</h2>
+    <p class="hint">Drag the sliders — the shortlist re-ranks instantly.</p>
     <div class="weights">
-      <label>Price <input type="range" id="w-price" min="0" max="100" value="40"><span id="w-price-v">40</span></label>
-      <label>Space <input type="range" id="w-space" min="0" max="100" value="20"><span id="w-space-v">20</span></label>
-      <label>Commute <input type="range" id="w-commute" min="0" max="100" value="25"><span id="w-commute-v">25</span></label>
-      <label>Amenities <input type="range" id="w-amen" min="0" max="100" value="15"><span id="w-amen-v">15</span></label>
+      <div class="slider-row">
+        <div class="slider-meta"><label for="w-price">Price</label><span class="slider-val" id="w-price-v">40</span></div>
+        <input type="range" id="w-price" min="0" max="100" value="40">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><label for="w-space">Space</label><span class="slider-val" id="w-space-v">20</span></div>
+        <input type="range" id="w-space" min="0" max="100" value="20">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><label for="w-commute">Commute</label><span class="slider-val" id="w-commute-v">25</span></div>
+        <input type="range" id="w-commute" min="0" max="100" value="25">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><label for="w-amen">Amenities</label><span class="slider-val" id="w-amen-v">15</span></div>
+        <input type="range" id="w-amen" min="0" max="100" value="15">
+      </div>
     </div>
-    <h3>Commute assumptions</h3>
+    <h3>Commute math</h3>
     <div class="grid2">
-      <label>Cost per mile ($) <input type="number" id="opt-cpm" step="0.01" min="0" value="0.70"></label>
-      <label>Work days / month <input type="number" id="opt-days" min="0" value="22"></label>
+      <label class="field">Cost per mile ($)<input type="number" id="opt-cpm" step="0.01" min="0" value="0.70"></label>
+      <label class="field">Work days / month<input type="number" id="opt-days" min="0" value="22"></label>
     </div>
     <button id="load-sample" class="ghost">Load sample listings</button>
-  </section>
+    <p class="rail-note">True cost = rent + move-in fees ÷ 12 + utilities + commute. Drive uses round-trip miles × work days × $/mile; transit uses the monthly pass; walk &amp; bike are free.</p>
+  </aside>
 
-  <section class="panel wide">
-    <div class="panel-head">
-      <h2>Your shortlist</h2>
-      <button id="add-listing">+ Add listing</button>
+  <section class="results" aria-label="Your shortlist">
+    <div class="results-head">
+      <div>
+        <h2>Your shortlist</h2>
+        <p class="hint">Ranked by your weights. The big number is what you’d actually pay each month.</p>
+      </div>
+      <button id="add-listing" class="primary">+ Add listing</button>
     </div>
     <div id="ranked"></div>
   </section>
 </main>
 
-<section class="panel full">
-  <h2>Side-by-side comparison</h2>
+<section class="ledger panel" aria-label="Side-by-side comparison">
+  <div class="ledger-head">
+    <h2>Side-by-side</h2>
+    <p class="hint">Every fact that matters, one row per feature.</p>
+  </div>
   <div class="table-wrap"><table id="compare"><thead></thead><tbody></tbody></table></div>
 </section>
 
-<div id="modal" class="modal hidden">
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal-card">
-    <div class="modal-head"><h2 id="modal-title">Add listing</h2><button id="modal-close" class="icon-btn" aria-label="Close">✕</button></div>
+    <div class="modal-head">
+      <div><h2 id="modal-title">Add listing</h2><p class="hint">Everything is optional except the name and rent.</p></div>
+      <button id="modal-close" class="icon-btn" aria-label="Close">✕</button>
+    </div>
     <form id="listing-form">
       <div class="grid2">
-        <label>Listing name * <input id="f-name" required maxlength="60"></label>
-        <label>Address <input id="f-address" maxlength="120"></label>
-        <label>Monthly rent ($) * <input id="f-rent" type="number" min="0" step="1" required></label>
-        <label>Square feet <input id="f-sqft" type="number" min="0" step="1"></label>
-        <label>Bedrooms <input id="f-beds" type="number" min="0" step="0.5"></label>
-        <label>Bathrooms <input id="f-baths" type="number" min="0" step="0.5"></label>
-        <label>One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over 12 months"></label>
-        <label>Est. utilities / mo ($) <input id="f-utils" type="number" min="0" step="1" value="0"></label>
-        <label>Commute, one-way (min) <input id="f-cmin" type="number" min="0" step="1" value="0"></label>
-        <label>Commute, one-way (miles) <input id="f-cmiles" type="number" min="0" step="0.1" value="0"></label>
-        <label>Commute mode
+        <label class="field">Listing name * <input id="f-name" required maxlength="60" placeholder="e.g. Sunset Lofts — 4B"></label>
+        <label class="field">Address <input id="f-address" maxlength="120" placeholder="e.g. 88 Sunset Ave"></label>
+        <label class="field">Monthly rent ($) * <input id="f-rent" type="number" min="0" step="1" required placeholder="2400"></label>
+        <label class="field">Square feet <input id="f-sqft" type="number" min="0" step="1" placeholder="950"></label>
+        <label class="field">Bedrooms <input id="f-beds" type="number" min="0" step="0.5" placeholder="2"></label>
+        <label class="field">Bathrooms <input id="f-baths" type="number" min="0" step="0.5" placeholder="2"></label>
+        <label class="field">One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over 12 months"></label>
+        <label class="field">Est. utilities / mo ($) <input id="f-utils" type="number" min="0" step="1" value="0" placeholder="140"></label>
+        <label class="field">Commute, one-way (min) <input id="f-cmin" type="number" min="0" step="1" value="0" placeholder="35"></label>
+        <label class="field">Commute, one-way (miles) <input id="f-cmiles" type="number" min="0" step="0.1" value="0" placeholder="14"></label>
+        <label class="field">Commute mode
           <select id="f-cmode">
             <option value="drive">Drive</option>
             <option value="transit">Transit</option>
@@ -67,17 +97,17 @@
             <option value="bike">Bike</option>
           </select>
         </label>
-        <label>Monthly transit pass ($) <input id="f-pass" type="number" min="0" step="1" value="0"></label>
+        <label class="field">Monthly transit pass ($) <input id="f-pass" type="number" min="0" step="1" value="0" placeholder="99"></label>
       </div>
       <fieldset><legend>Amenities</legend><div id="f-amen" class="chips"></div></fieldset>
       <div class="grid2">
-        <label>Pros <textarea id="f-pros" rows="2" maxlength="500"></textarea></label>
-        <label>Cons <textarea id="f-cons" rows="2" maxlength="500"></textarea></label>
+        <label class="field">Pros <textarea id="f-pros" rows="2" maxlength="500" placeholder="Huge windows, great light"></textarea></label>
+        <label class="field">Cons <textarea id="f-cons" rows="2" maxlength="500" placeholder="Street noise, thin walls"></textarea></label>
       </div>
-      <label>Notes <textarea id="f-notes" rows="2" maxlength="500"></textarea></label>
-      <div id="form-errors" class="errors"></div>
+      <label class="field">Notes <textarea id="f-notes" rows="2" maxlength="500" placeholder="Anything else worth remembering"></textarea></label>
+      <div id="form-errors" class="errors" role="alert"></div>
       <div class="form-actions">
-        <button type="submit">Save listing</button>
+        <button type="submit" class="primary">Save listing</button>
         <button type="button" id="delete-listing" class="danger hidden">Delete</button>
       </div>
     </form>

@@ -38,12 +38,40 @@
     };
   }
 
+  function segPct(part, total) {
+    return total > 0 ? Math.max(0, Math.min(100, (part / total) * 100)) : 0;
+  }
+
+  function trueCostHtml(l, cost) {
+    var total = cost.total || 0;
+    var p = function (v) { return segPct(v, total).toFixed(1) + '%'; };
+    var extra = total - A.num(l.rent, 0);
+    return '<div class="true-cost">' +
+      '<div class="tc-kicker">True monthly cost</div>' +
+      '<div class="tc-value">' + A.money(total) + '<small>/mo</small></div>' +
+      '<div class="tc-rent">listed rent <s>' + A.money(l.rent) + '</s> — fees, utilities &amp; commute add <b>' + A.money(extra) + '</b></div>' +
+      '<div class="tc-bar" role="img" aria-label="True cost breakdown: rent, fees, utilities, commute">' +
+      '<i class="seg-rent" style="width:' + p(cost.rent) + '"></i>' +
+      '<i class="seg-fees" style="width:' + p(cost.feesMonthly) + '"></i>' +
+      '<i class="seg-utils" style="width:' + p(cost.utilities) + '"></i>' +
+      '<i class="seg-commute" style="width:' + p(cost.commute) + '"></i>' +
+      '</div>' +
+      '<div class="tc-legend">' +
+      '<span><i class="dot" style="background:#155048"></i>Rent <b>' + A.money(cost.rent) + '</b></span>' +
+      '<span><i class="dot" style="background:#d97706"></i>Fees <b>' + A.money(cost.feesMonthly) + '</b></span>' +
+      '<span><i class="dot" style="background:#b8a888"></i>Utilities <b>' + A.money(cost.utilities) + '</b></span>' +
+      '<span><i class="dot" style="background:#d9cfb8"></i>Commute <b>' + A.money(cost.commute) + '</b></span>' +
+      '</div></div>';
+  }
+
+  function factorHtml(label, val) {
+    var v = Math.max(0, Math.min(100, Math.round(Number(val) || 0)));
+    return '<div class="factor"><span>' + label + '</span>' +
+      '<div class="frow"><div class="fbar"><i style="width:' + v + '%"></i></div><b>' + v + '</b></div></div>';
+  }
+
   function costLine(l, cost) {
-    return '<div class="cost-line">Rent <b>' + A.money(l.rent) + '</b> · true cost ' +
-      '<b>' + A.money(cost.total) + '/mo</b>' +
-      ' <span class="meta">(fees ' + A.money(cost.feesMonthly) +
-      ' + utils ' + A.money(cost.utilities) +
-      ' + commute ' + A.money(cost.commute) + ')</span></div>';
+    return trueCostHtml(l, cost);
   }
 
   function render() {
@@ -52,32 +80,37 @@
     var box = el('ranked');
     box.innerHTML = '';
     if (!ranked.length) {
-      box.innerHTML = '<div class="empty">No listings yet. Add your first apartment — or load the samples to see how scoring works.</div>';
+      box.innerHTML = '<div class="empty"><strong>No listings yet</strong>Add your first apartment — or load the samples to see the true-cost math in action.</div>';
     }
+    var winnerId = (ranked.length > 1 && ranked[0]) ? ranked[0].listing.id : null;
     ranked.forEach(function (r) {
       var card = document.createElement('div');
       card.className = 'card' + (r.rank === 1 && ranked.length > 1 ? ' winner' : '');
       var medal = r.rank === 1 && ranked.length > 1
         ? ' <span class="best-pill">Best pick</span>' : '';
       card.innerHTML =
-        '<div class="rank-badge">#' + r.rank + '</div>' +
-        '<div><h3>' + esc(r.listing.name) + medal + '</h3>' +
+        '<div class="card-top">' +
+        '<div class="score-ring" style="--s:' + r.score + '"><span>' + Math.round(r.score) + '</span></div>' +
+        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + '</h3>' +
         '<div class="meta">' + esc(r.listing.address || 'no address') + ' · ' +
         r.listing.beds + 'bd/' + r.listing.baths + 'ba · ' +
         (r.listing.sqft || '?') + ' sqft · ' +
         r.listing.commuteMin + ' min ' + esc(r.listing.commuteMode) + ' commute · ' +
-        (r.listing.amenities || []).length + ' amenities</div>' +
+        (r.listing.amenities || []).length + ' amenities</div></div>' +
+        '<div class="rank-chip">#' + r.rank + ' pick</div>' +
+        '</div>' +
         costLine(r.listing, r.cost) +
-        '<div class="scorebar"><i style="width:' + r.score + '%"></i></div>' +
-        '<div class="meta">score ' + r.score + '/100 — price ' + r.breakdown.price +
-        ' · space ' + r.breakdown.space + ' · commute ' + r.breakdown.commute +
-        ' · amenities ' + r.breakdown.amenities + '</div>' +
+        '<div class="factors">' +
+        factorHtml('Price', r.breakdown.price) +
+        factorHtml('Space', r.breakdown.space) +
+        factorHtml('Commute', r.breakdown.commute) +
+        factorHtml('Amenities', r.breakdown.amenities) +
+        '</div>' +
         (r.listing.pros || r.listing.cons
           ? '<div class="proscons">' +
-            (r.listing.pros ? '<span class="pro"><b>Pros</b> — ' + esc(r.listing.pros) + '</span><br>' : '') +
+            (r.listing.pros ? '<span class="pro"><b>Pros</b> — ' + esc(r.listing.pros) + '</span>' : '') +
             (r.listing.cons ? '<span class="con"><b>Cons</b> — ' + esc(r.listing.cons) + '</span>' : '') +
             '</div>' : '') +
-        '</div>' +
         '<div class="card-actions"><button data-edit="' + r.listing.id + '">Edit</button></div>';
       box.appendChild(card);
     });
@@ -92,13 +125,13 @@
     if (listings.length) {
       var hr = document.createElement('tr');
       hr.innerHTML = '<th>Feature</th>' + listings.map(function (l) {
-        return '<th>' + esc(l.name) + '</th>';
+        return '<th' + (winnerId && l.id === winnerId ? ' class="win-col"' : '') + '>' + esc(l.name) + '</th>';
       }).join('');
       thead.appendChild(hr);
       A.compareRows(listings, getOpts()).forEach(function (r) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<th>' + esc(r.label) + '</th>' + r.values.map(function (v) {
-          return '<td>' + esc(v) + '</td>';
+        tr.innerHTML = '<th>' + esc(r.label) + '</th>' + r.values.map(function (v, i) {
+          return '<td' + (winnerId && listings[i] && listings[i].id === winnerId ? ' class="win-col"' : '') + '>' + esc(v) + '</td>';
         }).join('');
         tbody.appendChild(tr);
       });
@@ -221,6 +254,9 @@
       el('w-space-v').textContent = el('w-space').value;
       el('w-commute-v').textContent = el('w-commute').value;
       el('w-amen-v').textContent = el('w-amen').value;
+      ['w-price', 'w-space', 'w-commute', 'w-amen'].forEach(function (id) {
+        el(id).style.setProperty('--fill', el(id).value + '%');
+      });
     }
     ['w-price', 'w-space', 'w-commute', 'w-amen'].forEach(function (id) {
       el(id).addEventListener('input', function () {
