@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ApartmentHunt AI — Compare apartments like a pro</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark"></span>ApartmentHunt AI</div>
+  <p class="tagline">True-cost math + weighted scoring, so the "cheaper" apartment doesn't fool you.</p>
+</header>
+
+<main class="layout">
+  <section class="panel" id="weights-panel">
+    <h2>What matters to you?</h2>
+    <p class="hint">Drag the sliders — rankings update instantly.</p>
+    <div class="weights">
+      <label>Price <input type="range" id="w-price" min="0" max="100" value="40"><span id="w-price-v">40</span></label>
+      <label>Space <input type="range" id="w-space" min="0" max="100" value="20"><span id="w-space-v">20</span></label>
+      <label>Commute <input type="range" id="w-commute" min="0" max="100" value="25"><span id="w-commute-v">25</span></label>
+      <label>Amenities <input type="range" id="w-amen" min="0" max="100" value="15"><span id="w-amen-v">15</span></label>
+    </div>
+    <h3>Commute assumptions</h3>
+    <div class="grid2">
+      <label>Cost per mile ($) <input type="number" id="opt-cpm" step="0.01" min="0" value="0.70"></label>
+      <label>Work days / month <input type="number" id="opt-days" min="0" value="22"></label>
+    </div>
+    <button id="load-sample" class="ghost">Load sample listings</button>
+  </section>
+
+  <section class="panel wide">
+    <div class="panel-head">
+      <h2>Your shortlist</h2>
+      <button id="add-listing">+ Add listing</button>
+    </div>
+    <div id="ranked"></div>
+  </section>
+</main>
+
+<section class="panel full">
+  <h2>Side-by-side comparison</h2>
+  <div class="table-wrap"><table id="compare"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="modal-title">Add listing</h2><button id="modal-close" class="icon-btn" aria-label="Close">✕</button></div>
+    <form id="listing-form">
+      <div class="grid2">
+        <label>Listing name * <input id="f-name" required maxlength="60"></label>
+        <label>Address <input id="f-address" maxlength="120"></label>
+        <label>Monthly rent ($) * <input id="f-rent" type="number" min="0" step="1" required></label>
+        <label>Square feet <input id="f-sqft" type="number" min="0" step="1"></label>
+        <label>Bedrooms <input id="f-beds" type="number" min="0" step="0.5"></label>
+        <label>Bathrooms <input id="f-baths" type="number" min="0" step="0.5"></label>
+        <label>One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over 12 months"></label>
+        <label>Est. utilities / mo ($) <input id="f-utils" type="number" min="0" step="1" value="0"></label>
+        <label>Commute, one-way (min) <input id="f-cmin" type="number" min="0" step="1" value="0"></label>
+        <label>Commute, one-way (miles) <input id="f-cmiles" type="number" min="0" step="0.1" value="0"></label>
+        <label>Commute mode
+          <select id="f-cmode">
+            <option value="drive">Drive</option>
+            <option value="transit">Transit</option>
+            <option value="walk">Walk</option>
+            <option value="bike">Bike</option>
+          </select>
+        </label>
+        <label>Monthly transit pass ($) <input id="f-pass" type="number" min="0" step="1" value="0"></label>
+      </div>
+      <fieldset><legend>Amenities</legend><div id="f-amen" class="chips"></div></fieldset>
+      <div class="grid2">
+        <label>Pros <textarea id="f-pros" rows="2" maxlength="500"></textarea></label>
+        <label>Cons <textarea id="f-cons" rows="2" maxlength="500"></textarea></label>
+      </div>
+      <label>Notes <textarea id="f-notes" rows="2" maxlength="500"></textarea></label>
+      <div id="form-errors" class="errors"></div>
+      <div class="form-actions">
+        <button type="submit">Save listing</button>
+        <button type="button" id="delete-listing" class="danger hidden">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<footer><p>100% local — your listings never leave this browser. Optional <code>OPENAI_API_KEY</code> may power AI summaries in a future version; nothing requires it.</p></footer>
+
+<script src="js/apt.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
