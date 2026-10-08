@@ -15,6 +15,11 @@ ApartmentHunt AI runs **100% locally in your browser**:
 3. **Weighted scoring** — tell it what matters with four sliders (price, space, commute, amenities). Every listing gets a 0–100 score with a per-factor breakdown, ranked best-first.
 4. **Side-by-side table** — rent, true cost, size, commute, amenities, and score for every listing in one view.
 
+- **Shortlist CSV export** — download listings with true costs, breakdowns, and scores.
+- **Sort control** — re-order the shortlist by best match, lowest true cost, most space, or shortest commute (comparison table follows).
+- **Budget guardrail** — set a max true monthly cost; listings over it get an *Over budget* badge.
+- **Duplicate listing** — clone a listing as a starting point for a similar unit.
+- **Reset weights** — one click restores the default priority sliders.
 Sample listings included so you can see scoring in action before entering your own.
 
 Optional: set `OPENAI_API_KEY` for AI-generated listing summaries in a future version — everything works fully offline without it.
