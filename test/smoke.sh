@@ -71,6 +71,44 @@ A.money(1234567.891) === '$1,234,567.89' ? ok('money formats with commas') : bad
 // amenities bank non-empty
 A.AMENITIES.length >= 8 ? ok('amenity bank has ' + A.AMENITIES.length + ' items') : bad('amenity bank too small');
 
+// new: shortlistCSV header + rows
+const csvL = [
+  Object.assign(A.blankListing(), { id: 'x1', name: 'A, \"quoted\"', rent: 2000, sqft: 800, commuteMin: 20, amenities: ['gym'] }),
+  Object.assign(A.blankListing(), { id: 'x2', name: 'B', rent: 1500, sqft: 600, commuteMin: 40, amenities: [] })
+];
+const csvOut = A.shortlistCSV(csvL, A.DEFAULT_WEIGHTS, {});
+const csvLines = csvOut.split('\n');
+csvLines.length === 3 && csvLines[0].indexOf('true_monthly_cost') !== -1
+  ? ok('shortlistCSV: header + 2 rows')
+  : bad('shortlistCSV shape: ' + csvLines.length + ' lines');
+csvLines[1].indexOf('"A, ""quoted"""') !== -1
+  ? ok('shortlistCSV: quotes commas in names')
+  : bad('shortlistCSV quoting: ' + csvLines[1]);
+
+// new: sortRanked orders + renumbers
+const srt = A.sortRanked(A.rank(csvL, A.DEFAULT_WEIGHTS, {}), 'cost');
+srt[0].listing.id === 'x2' && srt[0].rank === 1
+  ? ok('sortRanked: cheapest first, rank renumbered')
+  : bad('sortRanked by cost wrong');
+
+// new: budgetFlags
+const bfl = A.budgetFlags(A.rank(csvL, A.DEFAULT_WEIGHTS, {}), 1700);
+bfl.over.x1 && !bfl.over.x2 && bfl.count === 1
+  ? ok('budgetFlags: flags only the over-budget listing')
+  : bad('budgetFlags wrong: ' + JSON.stringify(bfl));
+
+// new: duplicateListing
+const dl = A.duplicateListing(csvL[0]);
+dl.id !== csvL[0].id && dl.name === csvL[0].name + ' (copy)' && dl.rent === csvL[0].rent
+  ? ok('duplicateListing: fresh id, copied fields')
+  : bad('duplicateListing wrong');
+
+// UI wires the new controls
+const html = require('fs').readFileSync('/home/hatch/workspace/apartmenthunt-ai/index.html', 'utf8');
+['sort-by', 'budget-cap', 'export-csv', 'reset-weights'].every(id => html.includes('id="' + id + '"'))
+  ? ok('index.html has sort/budget/export/reset controls')
+  : bad('missing new control ids in index.html');
+
 console.log('--- node checks: ' + pass + ' passed, ' + fail + ' failed ---');
 process.exit(fail ? 1 : 0);
 NODEEOF

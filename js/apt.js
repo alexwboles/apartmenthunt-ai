@@ -185,6 +185,68 @@
     ];
   }
 
+  function escapeCsvCell(v) {
+    var s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  /* Export the ranked shortlist as CSV: one row per listing with rent,
+   * true-cost breakdown, commute, score, and amenities. */
+  function shortlistCSV(listings, weights, opts) {
+    var ranked = rank(listings, weights, opts);
+    var rows = [[
+      'rank', 'name', 'address', 'rent', 'fees_monthly', 'utilities',
+      'commute_cost', 'true_monthly_cost', 'sqft', 'beds', 'baths',
+      'commute_min', 'commute_mode', 'amenities', 'score', 'pros', 'cons'
+    ]];
+    ranked.forEach(function (r) {
+      var l = r.listing, c = r.cost;
+      rows.push([
+        r.rank, l.name, l.address || '', c.rent, c.feesMonthly, c.utilities,
+        c.commute, c.total, num(l.sqft, 0), l.beds, l.baths,
+        num(l.commuteMin, 0), l.commuteMode, (l.amenities || []).join('; '),
+        r.score, l.pros || '', l.cons || ''
+      ]);
+    });
+    return rows.map(function (r) { return r.map(escapeCsvCell).join(','); }).join('\n');
+  }
+
+  /* Re-sort an already-ranked list. Keys: 'score' | 'cost' | 'space' | 'commute'. */
+  function sortRanked(ranked, key) {
+    var arr = (ranked || []).slice();
+    var by = {
+      score: function (a, b) { return b.score - a.score; },
+      cost: function (a, b) { return a.cost.total - b.cost.total; },
+      space: function (a, b) { return num(b.listing.sqft, 0) - num(a.listing.sqft, 0); },
+      commute: function (a, b) { return num(a.listing.commuteMin, 0) - num(b.listing.commuteMin, 0); }
+    }[key] || function (a, b) { return b.score - a.score; };
+    arr.sort(by);
+    arr.forEach(function (r, i) { r.rank = i + 1; });
+    return arr;
+  }
+
+  /* Flag listings whose true monthly cost exceeds maxBudget (>0).
+   * Returns { over: {id:true}, count }. */
+  function budgetFlags(ranked, maxBudget) {
+    var over = {};
+    var cap = num(maxBudget, 0);
+    var count = 0;
+    (ranked || []).forEach(function (r) {
+      if (cap > 0 && r.cost.total > cap) { over[r.listing.id] = true; count++; }
+    });
+    return { over: over, count: count };
+  }
+
+  /* Copy a listing for editing as a new unit (new id, "(copy)" name). */
+  function duplicateListing(l) {
+    var src = l || blankListing();
+    var copy = blankListing();
+    Object.keys(src).forEach(function (k) { if (k !== 'id') copy[k] = src[k]; });
+    copy.amenities = (src.amenities || []).slice();
+    copy.name = (src.name || 'Listing') + ' (copy)';
+    return copy;
+  }
+
   return {
     AMENITIES: AMENITIES,
     DEFAULT_WEIGHTS: DEFAULT_WEIGHTS,
@@ -196,6 +258,10 @@
     trueCost: trueCost,
     score: score,
     rank: rank,
-    compareRows: compareRows
+    compareRows: compareRows,
+    shortlistCSV: shortlistCSV,
+    sortRanked: sortRanked,
+    budgetFlags: budgetFlags,
+    duplicateListing: duplicateListing
   };
 }));

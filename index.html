@@ -47,7 +47,13 @@
       <label class="field">Cost per mile ($)<input type="number" id="opt-cpm" step="0.01" min="0" value="0.70"></label>
       <label class="field">Work days / month<input type="number" id="opt-days" min="0" value="22"></label>
     </div>
-    <button id="load-sample" class="ghost">Load sample listings</button>
+    <h3>Budget guardrail</h3>
+    <label class="field">Max true cost / mo ($)<input type="number" id="budget-cap" min="0" step="50" placeholder="e.g. 2600"></label>
+    <p class="rail-note">Apartments whose true monthly cost tops your budget get an <b>Over budget</b> badge — the math doesn't lie.</p>
+    <div class="rail-actions">
+      <button id="reset-weights" class="ghost">Reset weights</button>
+      <button id="load-sample" class="ghost">Load sample listings</button>
+    </div>
     <p class="rail-note">True cost = rent + move-in fees ÷ 12 + utilities + commute. Drive uses round-trip miles × work days × $/mile; transit uses the monthly pass; walk &amp; bike are free.</p>
   </aside>
 
@@ -57,7 +63,18 @@
         <h2>Your shortlist</h2>
         <p class="hint">Ranked by your weights. The big number is what you’d actually pay each month.</p>
       </div>
-      <button id="add-listing" class="primary">+ Add listing</button>
+      <div class="results-actions">
+        <label class="sort-label">Sort by
+          <select id="sort-by">
+            <option value="score">Best match</option>
+            <option value="cost">Lowest true cost</option>
+            <option value="space">Most space</option>
+            <option value="commute">Shortest commute</option>
+          </select>
+        </label>
+        <button id="export-csv" class="ghost">Export CSV</button>
+        <button id="add-listing" class="primary">+ Add listing</button>
+      </div>
     </div>
     <div id="ranked"></div>
   </section>

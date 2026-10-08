@@ -66,6 +66,59 @@ Math.abs(recomputed - s0.score) < 0.15
   ? ok('flow8: breakdown reconciles to total score')
   : bad('flow8: breakdown mismatch ' + recomputed + ' vs ' + s0.score);
 
+// Flow 9: shortlistCSV exports one header + one row per listing with a correct total
+const csv = A.shortlistCSV(listings, DEF, OPTS);
+const clines = csv.split('\n');
+clines[0].split(',')[0] === 'rank' && clines.length === 4
+  ? ok('flow9: CSV has header + 3 listing rows')
+  : bad('flow9: CSV shape wrong: ' + clines.length + ' lines');
+// true_monthly_cost column (index 7) must match the ranked total
+const rk9 = A.rank(listings, DEF, OPTS);
+const row1 = clines[1].split(',');
+Math.abs(parseFloat(row1[7]) - rk9[0].cost.total) < 0.01
+  ? ok('flow9: CSV true cost matches rank() total (' + row1[7] + ')')
+  : bad('flow9: CSV cost mismatch: ' + row1[7]);
+
+// Flow 10: sortRanked reorders by cost / space / commute and renumbers ranks
+const byCost = A.sortRanked(rk.slice(), 'cost');
+const totals = byCost.map(r => r.cost.total);
+totals.every((t, i) => i === 0 || t >= totals[i - 1])
+  ? ok('flow10: sort by cost orders ascending')
+  : bad('flow10: cost sort wrong');
+byCost[0].rank === 1 && byCost[2].rank === 3
+  ? ok('flow10: ranks renumbered 1..3 after sort')
+  : bad('flow10: rank renumbering broken');
+const bySpace = A.sortRanked(rk.slice(), 'space');
+bySpace[0].listing.sqft >= bySpace[2].listing.sqft
+  ? ok('flow10: sort by space orders descending')
+  : bad('flow10: space sort wrong');
+const byCommute = A.sortRanked(rk.slice(), 'commute');
+byCommute[0].listing.commuteMin <= byCommute[2].listing.commuteMin
+  ? ok('flow10: sort by commute orders ascending')
+  : bad('flow10: commute sort wrong');
+
+// Flow 11: budgetFlags marks only listings over the cap
+const bf = A.budgetFlags(rk, 2200);
+bf.count === Object.keys(bf.over).length
+  ? ok('flow11: budgetFlags count matches over-set (' + bf.count + ' over)')
+  : bad('flow11: budgetFlags inconsistent');
+const bfNone = A.budgetFlags(rk, 0);
+bfNone.count === 0 ? ok('flow11: zero cap flags nothing') : bad('flow11: zero cap flagged ' + bfNone.count);
+rk.forEach(r => {
+  const over = r.cost.total > 2200;
+  if (!!bf.over[r.listing.id] !== over) { bad('flow11: flag wrong for ' + r.listing.id); }
+});
+const allRight = rk.every(r => !!bf.over[r.listing.id] === (r.cost.total > 2200));
+allRight ? ok('flow11: every listing flagged correctly against the cap') : bad('flow11: flag mismatch');
+
+// Flow 12: duplicateListing copies everything except the id
+const src = listings[0];
+const dup = A.duplicateListing(src);
+dup.id !== src.id && dup.name === src.name + ' (copy)' && dup.rent === src.rent &&
+  dup.amenities.length === src.amenities.length && dup.amenities !== src.amenities
+  ? ok('flow12: duplicate copies fields with a fresh id')
+  : bad('flow12: duplicate malformed');
+
 console.log('---');
 console.log('E2E PASS: ' + pass + '  FAIL: ' + fail);
 process.exit(fail ? 1 : 0);

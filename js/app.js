@@ -5,6 +5,8 @@
   var LS_LIST = 'apthunt.listings.v1';
   var LS_W = 'apthunt.weights.v1';
   var LS_OPT = 'apthunt.opts.v1';
+  var LS_BUDGET = 'apthunt.budget.v1';
+  var sortKey = 'score';
 
   function load(k, fb) {
     try { var raw = localStorage.getItem(k); if (raw) return JSON.parse(raw); }
@@ -76,22 +78,26 @@
 
   function render() {
     var listings = load(LS_LIST, []);
-    var ranked = A.rank(listings, getWeights(), getOpts());
+    var ranked = A.sortRanked(A.rank(listings, getWeights(), getOpts()), sortKey);
     var box = el('ranked');
     box.innerHTML = '';
     if (!ranked.length) {
       box.innerHTML = '<div class="empty"><strong>No listings yet</strong>Add your first apartment — or load the samples to see the true-cost math in action.</div>';
     }
-    var winnerId = (ranked.length > 1 && ranked[0]) ? ranked[0].listing.id : null;
+    var budgetCap = A.num(el('budget-cap').value, 0);
+    var flags = A.budgetFlags(ranked, budgetCap);
+    var winnerId = (ranked.length > 1 && sortKey === 'score' && ranked[0]) ? ranked[0].listing.id : null;
     ranked.forEach(function (r) {
       var card = document.createElement('div');
-      card.className = 'card' + (r.rank === 1 && ranked.length > 1 ? ' winner' : '');
-      var medal = r.rank === 1 && ranked.length > 1
+      card.className = 'card' + (r.listing.id === winnerId ? ' winner' : '');
+      var medal = r.listing.id === winnerId
         ? ' <span class="best-pill">Best pick</span>' : '';
+      var overBadge = flags.over[r.listing.id]
+        ? ' <span class="budget-pill">Over budget</span>' : '';
       card.innerHTML =
         '<div class="card-top">' +
         '<div class="score-ring" style="--s:' + r.score + '"><span>' + Math.round(r.score) + '</span></div>' +
-        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + '</h3>' +
+        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + overBadge + '</h3>' +
         '<div class="meta">' + esc(r.listing.address || 'no address') + ' · ' +
         r.listing.beds + 'bd/' + r.listing.baths + 'ba · ' +
         (r.listing.sqft || '?') + ' sqft · ' +
@@ -111,33 +117,48 @@
             (r.listing.pros ? '<span class="pro"><b>Pros</b> — ' + esc(r.listing.pros) + '</span>' : '') +
             (r.listing.cons ? '<span class="con"><b>Cons</b> — ' + esc(r.listing.cons) + '</span>' : '') +
             '</div>' : '') +
-        '<div class="card-actions"><button data-edit="' + r.listing.id + '">Edit</button></div>';
+        '<div class="card-actions"><button data-dup="' + r.listing.id + '">Duplicate</button><button data-edit="' + r.listing.id + '">Edit</button></div>';
       box.appendChild(card);
     });
     box.querySelectorAll('[data-edit]').forEach(function (b) {
       b.addEventListener('click', function () { openModal(b.getAttribute('data-edit')); });
     });
+    box.querySelectorAll('[data-dup]').forEach(function (b) {
+      b.addEventListener('click', function () { duplicateFrom(b.getAttribute('data-dup')); });
+    });
 
-    // comparison table
+    // comparison table (follows the active sort)
     var thead = el('compare').querySelector('thead');
     var tbody = el('compare').querySelector('tbody');
     thead.innerHTML = ''; tbody.innerHTML = '';
-    if (listings.length) {
+    var ordered = ranked.map(function (r) { return r.listing; });
+    if (ordered.length) {
       var hr = document.createElement('tr');
-      hr.innerHTML = '<th>Feature</th>' + listings.map(function (l) {
+      hr.innerHTML = '<th>Feature</th>' + ordered.map(function (l) {
         return '<th' + (winnerId && l.id === winnerId ? ' class="win-col"' : '') + '>' + esc(l.name) + '</th>';
       }).join('');
       thead.appendChild(hr);
-      A.compareRows(listings, getOpts()).forEach(function (r) {
+      A.compareRows(ordered, getOpts()).forEach(function (r) {
         var tr = document.createElement('tr');
         tr.innerHTML = '<th>' + esc(r.label) + '</th>' + r.values.map(function (v, i) {
-          return '<td' + (winnerId && listings[i] && listings[i].id === winnerId ? ' class="win-col"' : '') + '>' + esc(v) + '</td>';
+          return '<td' + (winnerId && ordered[i] && ordered[i].id === winnerId ? ' class="win-col"' : '') + '>' + esc(v) + '</td>';
         }).join('');
         tbody.appendChild(tr);
       });
     } else {
       tbody.innerHTML = '<tr><td class="meta">Add listings to compare them side by side.</td></tr>';
     }
+  }
+
+  function duplicateFrom(id) {
+    var listings = load(LS_LIST, []);
+    var found = null;
+    listings.forEach(function (l) { if (l.id === id) found = l; });
+    if (!found) return;
+    var copy = A.duplicateListing(found);
+    listings.push(copy);
+    save(LS_LIST, listings);
+    openModal(copy.id);
   }
 
   function fillForm(l) {
@@ -242,12 +263,13 @@
       wrap.appendChild(lab);
     });
 
-    // restore weights + opts
+    // restore weights + opts + budget
     var w = load(LS_W, A.DEFAULT_WEIGHTS);
     el('w-price').value = w.price; el('w-space').value = w.space;
     el('w-commute').value = w.commute; el('w-amen').value = w.amenities;
     var o = load(LS_OPT, { commuteCostPerMile: 0.70, workDaysPerMonth: 22 });
     el('opt-cpm').value = o.commuteCostPerMile; el('opt-days').value = o.workDaysPerMonth;
+    el('budget-cap').value = load(LS_BUDGET, '');
 
     function syncLabels() {
       el('w-price-v').textContent = el('w-price').value;
@@ -274,6 +296,36 @@
     syncLabels();
 
     el('add-listing').addEventListener('click', function () { openModal(null); });
+    el('sort-by').addEventListener('change', function () {
+      sortKey = el('sort-by').value;
+      render();
+    });
+    el('budget-cap').addEventListener('input', function () {
+      save(LS_BUDGET, el('budget-cap').value);
+      render();
+    });
+    el('export-csv').addEventListener('click', function () {
+      var listings = load(LS_LIST, []);
+      if (!listings.length) return;
+      var csv = A.shortlistCSV(listings, getWeights(), getOpts());
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'apartmenthunt-shortlist.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    });
+    el('reset-weights').addEventListener('click', function () {
+      el('w-price').value = A.DEFAULT_WEIGHTS.price;
+      el('w-space').value = A.DEFAULT_WEIGHTS.space;
+      el('w-commute').value = A.DEFAULT_WEIGHTS.commute;
+      el('w-amen').value = A.DEFAULT_WEIGHTS.amenities;
+      syncLabels();
+      save(LS_W, getWeights());
+      render();
+    });
     el('modal-close').addEventListener('click', closeModal);
     el('modal').addEventListener('click', function (e) {
       if (e.target === el('modal')) closeModal();
