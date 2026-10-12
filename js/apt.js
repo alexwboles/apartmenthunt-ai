@@ -69,12 +69,19 @@
   }
 
   /* True monthly cost: rent + amortized one-time fees + utilities + commute.
-   * Drive commute cost = round-trip miles x work days x IRS-ish $/mile.
+   * One-time fees are spread over the lease term (opts.leaseMonths: 6 | 12 | 24,
+   * default 12). Drive commute cost = round-trip miles x work days x $/mile.
    * Transit commute cost = monthly pass. Walk/bike = $0. */
+  function leaseMonthsOf(opts) {
+    var m = parseInt((opts || {}).leaseMonths, 10);
+    return (m === 6 || m === 12 || m === 24) ? m : 12;
+  }
+
   function trueCost(l, opts) {
     opts = opts || {};
     var rent = num(l.rent, 0);
-    var feesMonthly = num(l.fees, 0) / 12;
+    var term = leaseMonthsOf(opts);
+    var feesMonthly = num(l.fees, 0) / term;
     var utilities = num(l.utilities, 0);
     var commute = 0;
     if (l.commuteMode === 'transit') {
@@ -90,7 +97,8 @@
       feesMonthly: Math.round(feesMonthly * 100) / 100,
       utilities: Math.round(utilities * 100) / 100,
       commute: Math.round(commute * 100) / 100,
-      total: Math.round(total * 100) / 100
+      total: Math.round(total * 100) / 100,
+      leaseMonths: term
     };
   }
 
@@ -165,6 +173,31 @@
     });
   }
 
+  /* Deal-breakers: hard filters a listing must satisfy to stay in the running.
+   * filters: { minBeds, maxCommuteMin, required: [amenity names], petFriendly }.
+   * Anything left at 0 / empty / false is not applied. */
+  function blankFilters() {
+    return { minBeds: 0, maxCommuteMin: 0, required: [], petFriendly: false };
+  }
+
+  function passesFilters(l, filters) {
+    var f = filters || blankFilters();
+    if (num(f.minBeds, 0) > 0 && num(l.beds, 0) < num(f.minBeds, 0)) return false;
+    if (num(f.maxCommuteMin, 0) > 0 && num(l.commuteMin, 0) > num(f.maxCommuteMin, 0)) return false;
+    var have = {};
+    (l.amenities || []).forEach(function (a) { have[a] = true; });
+    var need = f.required || [];
+    for (var i = 0; i < need.length; i++) {
+      if (!have[need[i]]) return false;
+    }
+    if (f.petFriendly && !have['pet friendly']) return false;
+    return true;
+  }
+
+  function filterListings(listings, filters) {
+    return (listings || []).filter(function (l) { return passesFilters(l, filters); });
+  }
+
   /* Side-by-side comparison rows for a table. */
   function compareRows(listings, opts) {
     var scored = {};
@@ -175,6 +208,10 @@
     return [
       row('Monthly rent', function (l) { return money(l.rent); }),
       row('True monthly cost', function (l) { return money(scored[l.id].cost.total); }),
+      row('True cost / sq ft', function (l) {
+        var sq = num(l.sqft, 0);
+        return sq > 0 ? money(scored[l.id].cost.total / sq) : '—';
+      }),
       row('Sq ft', function (l) { return String(num(l.sqft, 0)); }),
       row('Bed / bath', function (l) { return l.beds + ' / ' + l.baths; }),
       row('Commute (one-way)', function (l) {
@@ -197,7 +234,8 @@
     var rows = [[
       'rank', 'name', 'address', 'rent', 'fees_monthly', 'utilities',
       'commute_cost', 'true_monthly_cost', 'sqft', 'beds', 'baths',
-      'commute_min', 'commute_mode', 'amenities', 'score', 'pros', 'cons'
+      'commute_min', 'commute_mode', 'amenities', 'score', 'pros', 'cons',
+      'lease_months'
     ]];
     ranked.forEach(function (r) {
       var l = r.listing, c = r.cost;
@@ -205,20 +243,27 @@
         r.rank, l.name, l.address || '', c.rent, c.feesMonthly, c.utilities,
         c.commute, c.total, num(l.sqft, 0), l.beds, l.baths,
         num(l.commuteMin, 0), l.commuteMode, (l.amenities || []).join('; '),
-        r.score, l.pros || '', l.cons || ''
+        r.score, l.pros || '', l.cons || '',
+        c.leaseMonths
       ]);
     });
     return rows.map(function (r) { return r.map(escapeCsvCell).join(','); }).join('\n');
   }
 
-  /* Re-sort an already-ranked list. Keys: 'score' | 'cost' | 'space' | 'commute'. */
+  /* Re-sort an already-ranked list. Keys: 'score' | 'cost' | 'space' | 'commute' | 'value'.
+   * 'value' = true cost per sq ft, ascending (listings with no sqft sort last). */
   function sortRanked(ranked, key) {
     var arr = (ranked || []).slice();
+    function costPerSqft(r) {
+      var sq = num(r.listing.sqft, 0);
+      return sq > 0 ? r.cost.total / sq : Infinity;
+    }
     var by = {
       score: function (a, b) { return b.score - a.score; },
       cost: function (a, b) { return a.cost.total - b.cost.total; },
       space: function (a, b) { return num(b.listing.sqft, 0) - num(a.listing.sqft, 0); },
-      commute: function (a, b) { return num(a.listing.commuteMin, 0) - num(b.listing.commuteMin, 0); }
+      commute: function (a, b) { return num(a.listing.commuteMin, 0) - num(b.listing.commuteMin, 0); },
+      value: function (a, b) { return costPerSqft(a) - costPerSqft(b); }
     }[key] || function (a, b) { return b.score - a.score; };
     arr.sort(by);
     arr.forEach(function (r, i) { r.rank = i + 1; });
@@ -262,6 +307,10 @@
     shortlistCSV: shortlistCSV,
     sortRanked: sortRanked,
     budgetFlags: budgetFlags,
-    duplicateListing: duplicateListing
+    duplicateListing: duplicateListing,
+    blankFilters: blankFilters,
+    passesFilters: passesFilters,
+    filterListings: filterListings,
+    leaseMonthsOf: leaseMonthsOf
   };
 }));

@@ -36,8 +36,27 @@
   function getOpts() {
     return {
       commuteCostPerMile: A.num(el('opt-cpm').value, 0.70),
-      workDaysPerMonth: A.num(el('opt-days').value, 22)
+      workDaysPerMonth: A.num(el('opt-days').value, 22),
+      leaseMonths: parseInt(el('opt-term').value, 10) || 12
     };
+  }
+
+  var LS_FLT = 'apthunt.filters.v1';
+  function getFilters() {
+    var req = [];
+    var wrap = el('fl-amen');
+    if (wrap) {
+      wrap.querySelectorAll('input:checked').forEach(function (cb) { req.push(cb.value); });
+    }
+    return {
+      minBeds: A.num(el('fl-beds') ? el('fl-beds').value : 0, 0),
+      maxCommuteMin: A.num(el('fl-cmin') ? el('fl-cmin').value : 0, 0),
+      required: req,
+      petFriendly: !!(el('fl-pets') && el('fl-pets').checked)
+    };
+  }
+  function filtersActive(f) {
+    return (f.minBeds > 0) || (f.maxCommuteMin > 0) || (f.required.length > 0) || f.petFriendly;
   }
 
   function segPct(part, total) {
@@ -51,7 +70,7 @@
     return '<div class="true-cost">' +
       '<div class="tc-kicker">True monthly cost</div>' +
       '<div class="tc-value">' + A.money(total) + '<small>/mo</small></div>' +
-      '<div class="tc-rent">listed rent <s>' + A.money(l.rent) + '</s> — fees, utilities &amp; commute add <b>' + A.money(extra) + '</b></div>' +
+      '<div class="tc-rent">listed rent <s>' + A.money(l.rent) + '</s> — fees, utilities &amp; commute add <b>' + A.money(extra) + '</b> <span class="tc-term">(fees ÷ ' + (cost.leaseMonths || 12) + ' mo)</span></div>' +
       '<div class="tc-bar" role="img" aria-label="True cost breakdown: rent, fees, utilities, commute">' +
       '<i class="seg-rent" style="width:' + p(cost.rent) + '"></i>' +
       '<i class="seg-fees" style="width:' + p(cost.feesMonthly) + '"></i>' +
@@ -78,11 +97,20 @@
 
   function render() {
     var listings = load(LS_LIST, []);
-    var ranked = A.sortRanked(A.rank(listings, getWeights(), getOpts()), sortKey);
+    var filters = getFilters();
+    var kept = A.filterListings(listings, filters);
+    var hidden = listings.length - kept.length;
+    var ranked = A.sortRanked(A.rank(kept, getWeights(), getOpts()), sortKey);
     var box = el('ranked');
     box.innerHTML = '';
+    if (hidden > 0) {
+      box.innerHTML = '<div class="filter-note">' + hidden + ' listing' + (hidden === 1 ? '' : 's') +
+        ' hidden by your deal-breaker filters.</div>';
+    }
     if (!ranked.length) {
-      box.innerHTML = '<div class="empty"><strong>No listings yet</strong>Add your first apartment — or load the samples to see the true-cost math in action.</div>';
+      box.innerHTML += hidden > 0 && listings.length
+        ? '<div class="empty"><strong>Everything is filtered out</strong>Loosen a deal-breaker below to see your listings again.</div>'
+        : '<div class="empty"><strong>No listings yet</strong>Add your first apartment — or load the samples to see the true-cost math in action.</div>';
     }
     var budgetCap = A.num(el('budget-cap').value, 0);
     var flags = A.budgetFlags(ranked, budgetCap);
@@ -263,13 +291,61 @@
       wrap.appendChild(lab);
     });
 
-    // restore weights + opts + budget
+    // restore weights + opts + budget + filters
     var w = load(LS_W, A.DEFAULT_WEIGHTS);
     el('w-price').value = w.price; el('w-space').value = w.space;
     el('w-commute').value = w.commute; el('w-amen').value = w.amenities;
-    var o = load(LS_OPT, { commuteCostPerMile: 0.70, workDaysPerMonth: 22 });
+    var o = load(LS_OPT, { commuteCostPerMile: 0.70, workDaysPerMonth: 22, leaseMonths: 12 });
     el('opt-cpm').value = o.commuteCostPerMile; el('opt-days').value = o.workDaysPerMonth;
+    el('opt-term').value = String(o.leaseMonths || 12);
     el('budget-cap').value = load(LS_BUDGET, '');
+
+    // deal-breaker filters
+    var flwrap = el('fl-amen');
+    if (flwrap) {
+      A.AMENITIES.forEach(function (a) {
+        var lab = document.createElement('label');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = a;
+        cb.addEventListener('change', function () {
+          lab.classList.toggle('on', cb.checked);
+          save(LS_FLT, getFilters());
+          render();
+        });
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(a));
+        flwrap.appendChild(lab);
+      });
+      var fl = load(LS_FLT, A.blankFilters());
+      el('fl-beds').value = fl.minBeds || '';
+      el('fl-cmin').value = fl.maxCommuteMin || '';
+      el('fl-pets').checked = !!fl.petFriendly;
+      var need = {};
+      (fl.required || []).forEach(function (a) { need[a] = true; });
+      flwrap.querySelectorAll('input').forEach(function (cb) {
+        cb.checked = !!need[cb.value];
+        cb.closest('label').classList.toggle('on', cb.checked);
+      });
+    }
+    ['fl-beds', 'fl-cmin'].forEach(function (id) {
+      if (el(id)) el(id).addEventListener('input', function () {
+        save(LS_FLT, getFilters());
+        render();
+      });
+    });
+    if (el('fl-pets')) el('fl-pets').addEventListener('change', function () {
+      save(LS_FLT, getFilters());
+      render();
+    });
+    if (el('clear-filters')) el('clear-filters').addEventListener('click', function () {
+      save(LS_FLT, A.blankFilters());
+      el('fl-beds').value = ''; el('fl-cmin').value = ''; el('fl-pets').checked = false;
+      el('fl-amen').querySelectorAll('input').forEach(function (cb) {
+        cb.checked = false;
+        cb.closest('label').classList.toggle('on', false);
+      });
+      render();
+    });
 
     function syncLabels() {
       el('w-price-v').textContent = el('w-price').value;
@@ -287,7 +363,7 @@
         render();
       });
     });
-    ['opt-cpm', 'opt-days'].forEach(function (id) {
+    ['opt-cpm', 'opt-days', 'opt-term'].forEach(function (id) {
       el(id).addEventListener('change', function () {
         save(LS_OPT, getOpts());
         render();

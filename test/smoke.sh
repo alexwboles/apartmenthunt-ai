@@ -108,6 +108,25 @@ const html = require('fs').readFileSync('/home/hatch/workspace/apartmenthunt-ai/
 ['sort-by', 'budget-cap', 'export-csv', 'reset-weights'].every(id => html.includes('id="' + id + '"'))
   ? ok('index.html has sort/budget/export/reset controls')
   : bad('missing new control ids in index.html');
+['fl-beds', 'fl-cmin', 'fl-amen', 'fl-pets', 'clear-filters', 'opt-term'].every(id => html.includes('id="' + id + '"'))
+  ? ok('index.html has deal-breaker + lease-term controls')
+  : bad('missing filter/term control ids in index.html');
+html.includes('value="value"')
+  ? ok('index.html has Best value sort option')
+  : bad('missing value sort option');
+
+// new: passesFilters + leaseMonthsOf + value sort wired
+const A2 = A;
+const pf1 = Object.assign(A2.blankListing(), { beds: 2, commuteMin: 15, amenities: ['gym', 'pet friendly'] });
+A2.passesFilters(pf1, { minBeds: 2, maxCommuteMin: 20, required: ['gym'], petFriendly: true })
+  ? ok('passesFilters: matching listing passes')
+  : bad('passesFilters false negative');
+!A2.passesFilters(Object.assign(A2.blankListing(), { beds: 1 }), { minBeds: 2, maxCommuteMin: 0, required: [], petFriendly: false })
+  ? ok('passesFilters: minBeds excludes')
+  : bad('passesFilters minBeds false positive');
+A2.leaseMonthsOf({ leaseMonths: 24 }) === 24 && A2.leaseMonthsOf({}) === 12
+  ? ok('leaseMonthsOf: 24 accepted, default 12')
+  : bad('leaseMonthsOf wrong');
 
 console.log('--- node checks: ' + pass + ' passed, ' + fail + ' failed ---');
 process.exit(fail ? 1 : 0);

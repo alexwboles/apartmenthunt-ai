@@ -40,10 +40,10 @@ Math.abs(costs.s2.total - (1950 + 25 + 110 + 99)) < 0.01
   ? ok('flow4: Maple true cost reconciles: ' + A.money(costs.s2.total))
   : bad('flow4: Maple true cost wrong: ' + costs.s2.total);
 
-// Flow 5: comparison table has 7 rows x 3 listings
+// Flow 5: comparison table has 8 rows x 3 listings (incl. $/sq ft)
 const rows = A.compareRows(listings, OPTS);
-rows.length === 7 && rows.every(r => r.values.length === 3)
-  ? ok('flow5: compareRows = 7 rows x 3 listings')
+rows.length === 8 && rows.every(r => r.values.length === 3)
+  ? ok('flow5: compareRows = 8 rows x 3 listings')
   : bad('flow5: compare table shape wrong');
 rows[0].label === 'Monthly rent' ? ok('flow5: first row is monthly rent') : bad('flow5: row labels off');
 
@@ -118,6 +118,54 @@ dup.id !== src.id && dup.name === src.name + ' (copy)' && dup.rent === src.rent 
   dup.amenities.length === src.amenities.length && dup.amenities !== src.amenities
   ? ok('flow12: duplicate copies fields with a fresh id')
   : bad('flow12: duplicate malformed');
+
+// Flow 13: deal-breaker filters exclude non-matching listings
+const fl = { minBeds: 2, maxCommuteMin: 20, required: ['gym'], petFriendly: false };
+const kept = A.filterListings(listings, fl);
+kept.length < listings.length && kept.every(l => A.passesFilters(l, fl))
+  ? ok('flow13: passesFilters keeps only matching listings (' + kept.length + '/' + listings.length + ')')
+  : bad('flow13: filter wrong');
+A.passesFilters(A.blankListing(), A.blankFilters())
+  ? ok('flow13: blank filters pass everything')
+  : bad('flow13: blank filters should be permissive');
+const petL = Object.assign(A.blankListing(), { amenities: ['gym'] });
+A.passesFilters(petL, { minBeds: 0, maxCommuteMin: 0, required: [], petFriendly: true }) === false
+  ? ok('flow13: pet-friendly requirement excludes non-pet listings')
+  : bad('flow13: pet filter wrong');
+
+// Flow 14: lease term changes fee amortization (default stays 12)
+const feeL = Object.assign(A.blankListing(), { rent: 2000, fees: 1200 });
+const c12 = A.trueCost(feeL, { leaseMonths: 12 });
+const c6 = A.trueCost(feeL, { leaseMonths: 6 });
+const c24 = A.trueCost(feeL, { leaseMonths: 24 });
+c12.feesMonthly === 100 && c6.feesMonthly === 200 && c24.feesMonthly === 50
+  ? ok('flow14: fees amortize over the chosen lease term (100/200/50)')
+  : bad('flow14: amortization wrong: ' + c12.feesMonthly + '/' + c6.feesMonthly + '/' + c24.feesMonthly);
+const cDef = A.trueCost(feeL, {});
+cDef.feesMonthly === 100 && cDef.leaseMonths === 12
+  ? ok('flow14: default lease term is 12 months')
+  : bad('flow14: default term wrong');
+A.trueCost(feeL, { leaseMonths: 99 }).leaseMonths === 12
+  ? ok('flow14: bogus lease term falls back to 12')
+  : bad('flow14: term fallback wrong');
+
+// Flow 15: $/sq ft row + 'value' sort key
+const sqRow = A.compareRows(listings, OPTS).find(r => r.label === 'True cost / sq ft');
+sqRow && sqRow.values.every(v => v === '—' || v.charAt(0) === '$')
+  ? ok('flow15: $/sq ft row present (' + sqRow.values.join(' | ') + ')')
+  : bad('flow15: $/sq ft row missing');
+const byVal = A.sortRanked(rk.slice(), 'value');
+const vps = byVal.map(r => r.listing.sqft > 0 ? r.cost.total / r.listing.sqft : Infinity);
+vps.every((v, i) => i === 0 || v >= vps[i - 1])
+  ? ok('flow15: sort by value orders $/sq ft ascending')
+  : bad('flow15: value sort wrong');
+
+// Flow 16: CSV carries the lease_months column at the end
+const csv16 = A.shortlistCSV(listings, DEF, { leaseMonths: 24 });
+const head16 = csv16.split('\n')[0].split(',');
+head16[head16.length - 1] === 'lease_months' && csv16.split('\n')[1].split(',').pop() === '24'
+  ? ok('flow16: CSV lease_months column = 24')
+  : bad('flow16: lease_months column wrong');
 
 console.log('---');
 console.log('E2E PASS: ' + pass + '  FAIL: ' + fail);

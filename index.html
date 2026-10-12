@@ -47,14 +47,30 @@
       <label class="field">Cost per mile ($)<input type="number" id="opt-cpm" step="0.01" min="0" value="0.70"></label>
       <label class="field">Work days / month<input type="number" id="opt-days" min="0" value="22"></label>
     </div>
+    <label class="field">Lease term (fee amortization)
+      <select id="opt-term">
+        <option value="6">6 months</option>
+        <option value="12" selected>12 months</option>
+        <option value="24">24 months</option>
+      </select>
+    </label>
     <h3>Budget guardrail</h3>
     <label class="field">Max true cost / mo ($)<input type="number" id="budget-cap" min="0" step="50" placeholder="e.g. 2600"></label>
     <p class="rail-note">Apartments whose true monthly cost tops your budget get an <b>Over budget</b> badge — the math doesn't lie.</p>
+    <h3>Deal-breakers</h3>
+    <p class="rail-note">Hard filters — anything that misses one is out of the running, no matter its score.</p>
+    <div class="grid2">
+      <label class="field">Min bedrooms<input type="number" id="fl-beds" min="0" step="0.5" placeholder="0"></label>
+      <label class="field">Max commute (min)<input type="number" id="fl-cmin" min="0" step="1" placeholder="no limit"></label>
+    </div>
+    <div id="fl-amen" class="chips small"></div>
+    <label class="check"><input type="checkbox" id="fl-pets"> Must be pet friendly</label>
+    <button id="clear-filters" class="ghost">Clear deal-breakers</button>
     <div class="rail-actions">
       <button id="reset-weights" class="ghost">Reset weights</button>
       <button id="load-sample" class="ghost">Load sample listings</button>
     </div>
-    <p class="rail-note">True cost = rent + move-in fees ÷ 12 + utilities + commute. Drive uses round-trip miles × work days × $/mile; transit uses the monthly pass; walk &amp; bike are free.</p>
+    <p class="rail-note">True cost = rent + move-in fees ÷ lease term + utilities + commute. Drive uses round-trip miles × work days × $/mile; transit uses the monthly pass; walk &amp; bike are free.</p>
   </aside>
 
   <section class="results" aria-label="Your shortlist">
@@ -70,6 +86,7 @@
             <option value="cost">Lowest true cost</option>
             <option value="space">Most space</option>
             <option value="commute">Shortest commute</option>
+            <option value="value">Best value ($/sq ft)</option>
           </select>
         </label>
         <button id="export-csv" class="ghost">Export CSV</button>
@@ -102,7 +119,7 @@
         <label class="field">Square feet <input id="f-sqft" type="number" min="0" step="1" placeholder="950"></label>
         <label class="field">Bedrooms <input id="f-beds" type="number" min="0" step="0.5" placeholder="2"></label>
         <label class="field">Bathrooms <input id="f-baths" type="number" min="0" step="0.5" placeholder="2"></label>
-        <label class="field">One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over 12 months"></label>
+        <label class="field">One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over the lease term"></label>
         <label class="field">Est. utilities / mo ($) <input id="f-utils" type="number" min="0" step="1" value="0" placeholder="140"></label>
         <label class="field">Commute, one-way (min) <input id="f-cmin" type="number" min="0" step="1" value="0" placeholder="35"></label>
         <label class="field">Commute, one-way (miles) <input id="f-cmiles" type="number" min="0" step="0.1" value="0" placeholder="14"></label>
