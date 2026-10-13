@@ -174,6 +174,24 @@ const css = require('fs').readFileSync('/home/hatch/workspace/apartmenthunt-ai/c
   ? ok('css styles the new components')
   : bad('css missing second-sweep styles');
 
+// redesign sweep: photo + favorites
+['fav-toggle', 'result-count', 'f-photo', 'photo-preview', 'photo-clear'].every(id => html.includes('id="' + id + '"'))
+  ? ok('index.html has photo + favorites controls')
+  : bad('missing photo/favorites control ids in index.html');
+['skylineSvg', 'fileToPhoto', 'toggleFav', 'fav-btn', 'photo-band', 'favOnly'].every(s => appjs.includes(s))
+  ? ok('app.js wires photo upload + favorites + skyline art')
+  : bad('app.js missing photo/favorites wiring');
+['photo-band', 'fav-btn', 'results-toolbar', 'skyline'].every(s => css.includes(s))
+  ? ok('css styles photo band + toolbar')
+  : bad('css missing photo band / toolbar styles');
+('photo' in A.blankListing() && 'fav' in A.blankListing())
+  ? ok('blankListing carries photo + fav fields')
+  : bad('blankListing missing photo/fav');
+const dup = A.duplicateListing(Object.assign(A.blankListing(), { name: 'X', fav: true, photo: 'data:image/jpeg;base64,AAA' }));
+(dup.fav === true && dup.photo === 'data:image/jpeg;base64,AAA' && dup.id !== undefined)
+  ? ok('duplicateListing preserves fav + photo')
+  : bad('duplicateListing drops fav/photo');
+
 console.log('--- node checks: ' + pass + ' passed, ' + fail + ' failed ---');
 process.exit(fail ? 1 : 0);
 NODEEOF

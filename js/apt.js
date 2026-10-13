@@ -53,7 +53,9 @@
       amenities: [],
       pros: '',
       cons: '',
-      notes: ''
+      notes: '',
+      photo: '',        // dataURL (JPEG, downscaled) or ''
+      fav: false        // saved/favorite
     };
   }
 

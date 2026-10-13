@@ -11,7 +11,7 @@
   <div class="topbar-inner">
     <div class="brand">
       <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
       </span>
       <span class="brand-name">ApartmentHunt <em>AI</em></span>
     </div>
@@ -76,12 +76,16 @@
   </aside>
 
   <section class="results" aria-label="Your shortlist">
-    <div class="results-head">
-      <div>
+    <div class="results-toolbar" id="results-toolbar">
+      <div class="toolbar-left">
         <h2>Your shortlist</h2>
-        <p class="hint">Ranked by your weights. The big number is what you’d actually pay each month.</p>
+        <span class="result-count" id="result-count"></span>
       </div>
-      <div class="results-actions">
+      <div class="toolbar-actions">
+        <button id="fav-toggle" class="toolbtn" aria-pressed="false" title="Show favorites only">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.9-9.5-9C1 8.5 3 5 6.5 5c2 0 3.5 1.1 4.5 2.7C12 6.1 13.5 5 15.5 5 19 5 21 8.5 19.5 12c-2 4.1-7.5 9-7.5 9z"/></svg>
+          Saved
+        </button>
         <label class="sort-label">Sort by
           <select id="sort-by">
             <option value="score">Best match</option>
@@ -91,10 +95,11 @@
             <option value="value">Best value ($/sq ft)</option>
           </select>
         </label>
-        <button id="export-csv" class="ghost">Export CSV</button>
+        <button id="export-csv" class="toolbtn">Export CSV</button>
         <button id="add-listing" class="primary">+ Add listing</button>
       </div>
     </div>
+    <p class="hint">Ranked by your weights. The big number is what you’d actually pay each month.</p>
     <div id="ranked"></div>
   </section>
 </main>
@@ -135,6 +140,15 @@
           </select>
         </label>
         <label class="field">Monthly transit pass ($) <input id="f-pass" type="number" min="0" step="1" value="0" placeholder="99"></label>
+      </div>
+      <div class="photo-field">
+        <label class="field">Listing photo
+          <input id="f-photo" type="file" accept="image/*">
+        </label>
+        <div class="photo-preview-wrap">
+          <img id="photo-preview" alt="Listing photo preview">
+          <button type="button" id="photo-clear" class="ghost small-ghost">Remove photo</button>
+        </div>
       </div>
       <fieldset><legend>Amenities</legend><div id="f-amen" class="chips"></div></fieldset>
       <div class="grid2">

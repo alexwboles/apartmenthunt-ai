@@ -8,6 +8,80 @@
   var LS_BUDGET = 'apthunt.budget.v1';
   var sortKey = 'score';
   var showHidden = false;
+  var favOnly = false;
+
+  /* Deterministic skyline art for listings without a photo.
+   * Solid ink/green/amber blocks on a warm paper sky — no gradients. */
+  function hashStr(s) {
+    var h = 2166136261;
+    s = String(s || 'x');
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function skylineSvg(name, id) {
+    var rnd = hashStr(name + '|' + id);
+    var pick = function (n) { rnd = (Math.imul(rnd, 1664525) + 1013904223) >>> 0; return rnd % n; };
+    var skies = ['#ded5bd', '#d3d9c4', '#ddd2b8'];
+    var bodies = ['#232c28', '#31423a', '#4c5a50', '#6e5a35', '#1b1712', '#3b3226'];
+    var sky = skies[pick(skies.length)];
+    var rects = '';
+    var x = 0;
+    while (x < 800) {
+      var w = 52 + pick(56);
+      var h = 110 + pick(130);
+      var c = bodies[pick(bodies.length)];
+      rects += '<rect x="' + x + '" y="' + (280 - h) + '" width="' + w + '" height="' + h + '" fill="' + c + '"/>';
+      // antenna on some buildings
+      if (pick(3) === 0) {
+        rects += '<rect x="' + (x + Math.floor(w / 2) - 1) + '" y="' + (280 - h - 26) + '" width="3" height="26" fill="' + c + '"/>';
+      }
+      var wx = x + 7;
+      var wy0 = 280 - h + 10;
+      while (wx < x + w - 11) {
+        var r = 0;
+        while (wy0 + r * 16 + 9 < 268 && r < 9) {
+          if (pick(4) > 0) rects += '<rect x="' + wx + '" y="' + (wy0 + r * 16) + '" width="7" height="9" fill="#f3ecd9" opacity="0.5"/>';
+          r++;
+        }
+        wx += 15;
+      }
+      x += w + 6 + pick(10);
+    }
+    return '<svg class="skyline" viewBox="0 0 800 280" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Building illustration">' +
+      '<rect width="800" height="280" fill="' + sky + '"/>' +
+      '<circle cx="' + (620 + pick(120)) + '" cy="' + (34 + pick(40)) + '" r="22" fill="#b45309" opacity="0.8"/>' +
+      rects + '<rect y="272" width="800" height="8" fill="#171310"/></svg>';
+  }
+
+  /* Downscale an image File to a JPEG dataURL (max 800px side). */
+  function fileToPhoto(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+        reject(new Error('not an image'));
+        return;
+      }
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function () {
+        try {
+          var max = 800;
+          var scale = Math.min(1, max / Math.max(img.width, img.height));
+          var cw = Math.max(1, Math.round(img.width * scale));
+          var ch = Math.max(1, Math.round(img.height * scale));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          URL.revokeObjectURL(url);
+          resolve(cv.toDataURL('image/jpeg', 0.72));
+        } catch (e) { reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+      img.src = url;
+    });
+  }
 
   function load(k, fb) {
     try { var raw = localStorage.getItem(k); if (raw) return JSON.parse(raw); }
@@ -102,6 +176,9 @@
     var filters = getFilters();
     var kept = A.filterListings(listings, filters);
     var hidden = listings.length - kept.length;
+    if (favOnly) {
+      kept = kept.filter(function (l) { return !!l.fav; });
+    }
     var opts = getOpts();
     var ranked = A.sortRanked(A.rank(kept, getWeights(), opts), sortKey);
     var box = el('ranked');
@@ -116,6 +193,7 @@
         ? '<div class="empty"><strong>Everything is filtered out</strong>Loosen a deal-breaker below to see your listings again.</div>'
         : '<div class="empty"><strong>No listings yet</strong>Add your first apartment — or load the samples to see the true-cost math in action.</div>';
     }
+    el('result-count').textContent = kept.length + ' of ' + listings.length + ' listing' + (listings.length === 1 ? '' : 's');
     var budgetCap = A.num(el('budget-cap').value, 0);
     var flags = A.budgetFlags(ranked, budgetCap);
     var income = opts.income;
@@ -132,17 +210,26 @@
         ? ' <span class="afford-pill ' + aff.status + '" title="True cost is ' + aff.pct + '% of your monthly income (30% rule)">' +
           aff.pct + '% of income</span>' : '';
       var mi = A.moveInCost(r.listing);
+      var isFav = !!r.listing.fav;
+      var photoBand = r.listing.photo
+        ? '<img class="photo" src="' + esc(r.listing.photo) + '" alt="">'
+        : skylineSvg(r.listing.name, r.listing.id);
       card.innerHTML =
-        '<div class="card-top">' +
-        '<div class="score-ring" style="--s:' + r.score + '"><span>' + Math.round(r.score) + '</span></div>' +
-        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + overBadge + affBadge + '</h3>' +
-        '<div class="meta">' + esc(r.listing.address || 'no address') + ' · ' +
+        '<div class="photo-band">' + photoBand +
+        '<button class="fav-btn" data-fav="' + r.listing.id + '" aria-pressed="' + isFav + '" aria-label="' + (isFav ? 'Remove from saved' : 'Save this listing') + '" title="' + (isFav ? 'Remove from saved' : 'Save this listing') + '">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.9-9.5-9C1 8.5 3 5 6.5 5c2 0 3.5 1.1 4.5 2.7C12 6.1 13.5 5 15.5 5 19 5 21 8.5 19.5 12c-2 4.1-7.5 9-7.5 9z"/></svg></button>' +
+        '<div class="photo-overlay">' +
+        '<div class="addr">' + esc(r.listing.address || 'no address listed') + '</div>' +
+        '<div class="rank-chip">#' + r.rank + ' pick</div>' +
+        '</div></div>' +
+        '<div class="card-body">' +
+        '<div class="card-title-row"><h3>' + esc(r.listing.name) + medal + overBadge + affBadge + '</h3>' +
+        '<div class="score-ring" style="--s:' + r.score + '"><span>' + Math.round(r.score) + '</span></div></div>' +
+        '<div class="meta">' +
         r.listing.beds + 'bd/' + r.listing.baths + 'ba · ' +
         (r.listing.sqft || '?') + ' sqft · ' +
         r.listing.commuteMin + ' min ' + esc(r.listing.commuteMode) + ' commute · ' +
-        (r.listing.amenities || []).length + ' amenities</div></div>' +
-        '<div class="rank-chip">#' + r.rank + ' pick</div>' +
-        '</div>' +
+        (r.listing.amenities || []).length + ' amenities</div>' +
         costLine(r.listing, r.cost) +
         '<div class="movein">Move-in cash: <b>' + A.money(mi.total) + '</b>' +
         '<span class="meta"> — first rent ' + A.money(mi.rent) + ' + ' + A.money(mi.fees) + ' fees + ' +
@@ -158,11 +245,17 @@
             (r.listing.pros ? '<span class="pro"><b>Pros</b> — ' + esc(r.listing.pros) + '</span>' : '') +
             (r.listing.cons ? '<span class="con"><b>Cons</b> — ' + esc(r.listing.cons) + '</span>' : '') +
             '</div>' : '') +
-        '<div class="card-actions"><button data-dup="' + r.listing.id + '">Duplicate</button><button data-edit="' + r.listing.id + '">Edit</button></div>';
+        '<div class="card-actions"><button data-dup="' + r.listing.id + '">Duplicate</button><button data-edit="' + r.listing.id + '">Edit</button></div></div>';
       box.appendChild(card);
     });
     box.querySelectorAll('[data-edit]').forEach(function (b) {
       b.addEventListener('click', function () { openModal(b.getAttribute('data-edit')); });
+    });
+    box.querySelectorAll('[data-fav]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleFav(b.getAttribute('data-fav'));
+      });
     });
     box.querySelectorAll('[data-dup]').forEach(function (b) {
       b.addEventListener('click', function () { duplicateFrom(b.getAttribute('data-dup')); });
@@ -208,6 +301,15 @@
     }
   }
 
+  var pendingPhoto = '';
+
+  function toggleFav(id) {
+    var listings = load(LS_LIST, []);
+    listings.forEach(function (l) { if (l.id === id) l.fav = !l.fav; });
+    save(LS_LIST, listings);
+    render();
+  }
+
   function duplicateFrom(id) {
     var listings = load(LS_LIST, []);
     var found = null;
@@ -236,6 +338,11 @@
     el('f-pros').value = l.pros || '';
     el('f-cons').value = l.cons || '';
     el('f-notes').value = l.notes || '';
+    pendingPhoto = l.photo || '';
+    el('f-photo').value = '';
+    var pv = el('photo-preview');
+    pv.src = pendingPhoto;
+    pv.style.display = pendingPhoto ? '' : 'none';
     var have = {};
     (l.amenities || []).forEach(function (a) { have[a] = true; });
     el('f-amen').querySelectorAll('input').forEach(function (cb) {
@@ -266,7 +373,13 @@
       amenities: amens,
       pros: el('f-pros').value.trim(),
       cons: el('f-cons').value.trim(),
-      notes: el('f-notes').value.trim()
+      notes: el('f-notes').value.trim(),
+      photo: pendingPhoto || '',
+      fav: editingId ? (function () {
+        var cur = null;
+        load(LS_LIST, []).forEach(function (x) { if (x.id === editingId) cur = x; });
+        return !!(cur && cur.fav);
+      })() : false
     };
   }
 
@@ -445,18 +558,44 @@
     });
     el('listing-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var l = readForm();
-      var errs = A.validateListing(l);
-      if (errs.length) {
-        el('form-errors').innerHTML = errs.map(esc).join('<br>');
-        return;
+      var finish = function () {
+        var l = readForm();
+        var errs = A.validateListing(l);
+        if (errs.length) {
+          el('form-errors').innerHTML = errs.map(esc).join('<br>');
+          return;
+        }
+        var listings = load(LS_LIST, []);
+        var i = -1;
+        listings.forEach(function (x, xi) { if (x.id === l.id) i = xi; });
+        if (i >= 0) listings[i] = l; else listings.push(l);
+        save(LS_LIST, listings);
+        closeModal();
+        render();
+      };
+      var file = el('f-photo').files && el('f-photo').files[0];
+      if (file) {
+        el('form-errors').innerHTML = 'Processing photo…';
+        fileToPhoto(file).then(function (dataUrl) {
+          pendingPhoto = dataUrl;
+          el('form-errors').innerHTML = '';
+          finish();
+        }, function () {
+          el('form-errors').innerHTML = 'That photo could not be read — try a different image.';
+        });
+      } else {
+        finish();
       }
-      var listings = load(LS_LIST, []);
-      var i = -1;
-      listings.forEach(function (x, xi) { if (x.id === l.id) i = xi; });
-      if (i >= 0) listings[i] = l; else listings.push(l);
-      save(LS_LIST, listings);
-      closeModal();
+    });
+    el('photo-clear').addEventListener('click', function () {
+      pendingPhoto = '';
+      el('f-photo').value = '';
+      el('photo-preview').src = '';
+      el('photo-preview').style.display = 'none';
+    });
+    el('fav-toggle').addEventListener('click', function () {
+      favOnly = !favOnly;
+      el('fav-toggle').setAttribute('aria-pressed', String(favOnly));
       render();
     });
     el('delete-listing').addEventListener('click', function () {
