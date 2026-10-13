@@ -128,6 +128,52 @@ A2.leaseMonthsOf({ leaseMonths: 24 }) === 24 && A2.leaseMonthsOf({}) === 12
   ? ok('leaseMonthsOf: 24 accepted, default 12')
   : bad('leaseMonthsOf wrong');
 
+// second sweep: moveInCost / affordability / filterReasons
+const m1 = A.moveInCost(Object.assign(A.blankListing(), { rent: 2000, fees: 500 }));
+m1.total === 4500 && m1.deposit === 2000 && m1.assumedDeposit === true
+  ? ok('moveInCost: blank deposit assumed = rent (2000+500+2000)')
+  : bad('moveInCost assumed deposit: ' + JSON.stringify(m1));
+const m2 = A.moveInCost(Object.assign(A.blankListing(), { rent: 2000, fees: 500, deposit: 1000 }));
+m2.total === 3500 && m2.assumedDeposit === false
+  ? ok('moveInCost: explicit deposit used')
+  : bad('moveInCost explicit: ' + JSON.stringify(m2));
+const a1 = A.affordability(Object.assign(A.blankListing(), { rent: 3000 }), {}, 10000);
+a1 && a1.status === 'good' && a1.pct === 30
+  ? ok('affordability: 30% -> good')
+  : bad('affordability good: ' + JSON.stringify(a1));
+const a2 = A.affordability(Object.assign(A.blankListing(), { rent: 3500 }), {}, 10000);
+a2 && a2.status === 'stretch'
+  ? ok('affordability: 35% -> stretch')
+  : bad('affordability stretch: ' + JSON.stringify(a2));
+const a3 = A.affordability(Object.assign(A.blankListing(), { rent: 4500 }), {}, 10000);
+a3 && a3.status === 'over'
+  ? ok('affordability: 45% -> over')
+  : bad('affordability over: ' + JSON.stringify(a3));
+A.affordability(A.blankListing(), {}, 0) === null
+  ? ok('affordability: null without income')
+  : bad('affordability should be null');
+const fr1 = A.filterReasons(Object.assign(A.blankListing(), { beds: 1, commuteMin: 40, amenities: [] }),
+  { minBeds: 2, maxCommuteMin: 30, required: ['gym'], petFriendly: true });
+fr1.length === 4
+  ? ok('filterReasons: 4 reasons for a 4-way miss')
+  : bad('filterReasons count: ' + JSON.stringify(fr1));
+A.filterReasons(A.blankListing(), A.blankFilters()).length === 0
+  ? ok('filterReasons: empty on blank filters')
+  : bad('filterReasons false positive');
+
+// second sweep: new UI ids wired
+['opt-income', 'f-deposit'].every(id => html.includes('id="' + id + '"'))
+  ? ok('index.html has income + deposit controls')
+  : bad('missing second-sweep control ids in index.html');
+const appjs = require('fs').readFileSync('/home/hatch/workspace/apartmenthunt-ai/js/app.js', 'utf8');
+['affordability', 'moveInCost', 'filterReasons', 'afford-pill', 'eliminated', 'movein', 'toggle-hidden'].every(s => appjs.includes(s))
+  ? ok('app.js wires affordability + move-in cash + eliminated view')
+  : bad('app.js missing second-sweep wiring');
+const css = require('fs').readFileSync('/home/hatch/workspace/apartmenthunt-ai/css/style.css', 'utf8');
+['afford-pill', 'elim-card', 'linklike'].every(s => css.includes(s))
+  ? ok('css styles the new components')
+  : bad('css missing second-sweep styles');
+
 console.log('--- node checks: ' + pass + ' passed, ' + fail + ' failed ---');
 process.exit(fail ? 1 : 0);
 NODEEOF

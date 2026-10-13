@@ -40,12 +40,23 @@ Math.abs(costs.s2.total - (1950 + 25 + 110 + 99)) < 0.01
   ? ok('flow4: Maple true cost reconciles: ' + A.money(costs.s2.total))
   : bad('flow4: Maple true cost wrong: ' + costs.s2.total);
 
-// Flow 5: comparison table has 8 rows x 3 listings (incl. $/sq ft)
+// Flow 5: comparison table has 9 rows x 3 listings (incl. $/sq ft + move-in cash)
 const rows = A.compareRows(listings, OPTS);
-rows.length === 8 && rows.every(r => r.values.length === 3)
-  ? ok('flow5: compareRows = 8 rows x 3 listings')
-  : bad('flow5: compare table shape wrong');
+rows.length === 9 && rows.every(r => r.values.length === 3)
+  ? ok('flow5: compareRows = 9 rows x 3 listings')
+  : bad('flow5: compare table shape wrong: ' + rows.length + ' rows');
 rows[0].label === 'Monthly rent' ? ok('flow5: first row is monthly rent') : bad('flow5: row labels off');
+rows.some(r => r.label === 'Move-in cash needed')
+  ? ok('flow5: move-in cash row present')
+  : bad('flow5: move-in cash row missing');
+const rowsInc = A.compareRows(listings, OPTS, 8000);
+rowsInc.length === 10 && rowsInc.some(r => r.label === 'Share of income')
+  ? ok('flow5: income passed -> Share of income row appears')
+  : bad('flow5: share-of-income row missing with income set');
+const rowsNoInc = A.compareRows(listings, OPTS, 0);
+rowsNoInc.length === 9
+  ? ok('flow5: no income -> no share-of-income row')
+  : bad('flow5: unexpected rows without income');
 
 // Flow 6: single listing scores a clean 100 (nothing to compare against)
 const solo = A.score([listings[0]], DEF, OPTS);
@@ -166,6 +177,45 @@ const head16 = csv16.split('\n')[0].split(',');
 head16[head16.length - 1] === 'lease_months' && csv16.split('\n')[1].split(',').pop() === '24'
   ? ok('flow16: CSV lease_months column = 24')
   : bad('flow16: lease_months column wrong');
+
+// Flow 17: affordability applies the 30% rule to TRUE cost, not rent
+const affS2 = A.affordability(listings[1], OPTS, 8000); // Maple true cost 2184
+affS2 && affS2.status === 'good' && Math.abs(affS2.pct - 27.3) < 0.1
+  ? ok('flow17: Maple 27.3% of $8k income -> good (' + affS2.pct + '%)')
+  : bad('flow17: ' + JSON.stringify(affS2));
+const affS3 = A.affordability(listings[2], OPTS, 6000); // Foundry true cost ~3031
+affS3 && affS3.status === 'over'
+  ? ok('flow17: Foundry 50%+ of $6k income -> over (' + affS3.pct + '%)')
+  : bad('flow17: ' + JSON.stringify(affS3));
+A.affordability(listings[0], OPTS, 0) === null
+  ? ok('flow17: no income -> null (no badge)')
+  : bad('flow17: should be null without income');
+
+// Flow 18: move-in cash = first rent + fees + deposit (assumed = rent when blank)
+const mi1 = A.moveInCost(listings[0]); // Sunset: 2400 + 1200 + assumed 2400
+mi1.total === 6000 && mi1.assumedDeposit === true
+  ? ok('flow18: Sunset move-in $6,000 with assumed deposit')
+  : bad('flow18: ' + JSON.stringify(mi1));
+const withDep = Object.assign({}, listings[1], { deposit: 500 });
+const mi2 = A.moveInCost(withDep);
+mi2.total === 1950 + 300 + 500 && mi2.deposit === 500 && mi2.assumedDeposit === false
+  ? ok('flow18: explicit $500 deposit honored ($2,750)')
+  : bad('flow18: ' + JSON.stringify(mi2));
+A.validateListing(Object.assign({}, listings[0], { deposit: -5 })).some(e => e.indexOf('Deposit') !== -1)
+  ? ok('flow18: negative deposit rejected by validation')
+  : bad('flow18: negative deposit accepted');
+
+// Flow 19: filterReasons explains each elimination
+const fr = A.filterReasons(listings[1], { minBeds: 2, maxCommuteMin: 15, required: ['parking'], petFriendly: true });
+fr.length === 3 && fr.some(r => r.indexOf('beds') !== -1) && fr.some(r => r.indexOf('parking') !== -1) && fr.some(r => r.indexOf('commute') !== -1)
+  ? ok('flow19: Maple eliminated with 3 reasons: ' + fr.join(' / '))
+  : bad('flow19: ' + JSON.stringify(fr));
+A.filterReasons(listings[0], A.blankFilters()).length === 0
+  ? ok('flow19: passing listing gets no reasons')
+  : bad('flow19: false reasons for a pass');
+A.filterReasons(listings[2], { minBeds: 2, maxCommuteMin: 15, required: [], petFriendly: false }).length === 0
+  ? ok('flow19: Foundry passes strict-but-fair filters')
+  : bad('flow19: Foundry wrongly flagged');
 
 console.log('---');
 console.log('E2E PASS: ' + pass + '  FAIL: ' + fail);

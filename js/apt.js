@@ -44,6 +44,7 @@
       beds: 0,
       baths: 0,
       fees: 0,          // one-time move-in fees, amortized over 12 months
+      deposit: 0,       // refundable security deposit, due at signing (0 = assume one month's rent)
       utilities: 0,     // estimated monthly utilities
       commuteMin: 0,    // one-way minutes
       commuteMiles: 0,  // one-way miles
@@ -64,6 +65,7 @@
     if (num(l.beds, 0) < 0) errs.push('Bedrooms cannot be negative.');
     if (num(l.commuteMin, 0) < 0) errs.push('Commute minutes cannot be negative.');
     if (num(l.fees, 0) < 0) errs.push('Fees cannot be negative.');
+    if (num(l.deposit, 0) < 0) errs.push('Deposit cannot be negative.');
     if (num(l.utilities, 0) < 0) errs.push('Utilities cannot be negative.');
     return errs;
   }
@@ -198,16 +200,67 @@
     return (listings || []).filter(function (l) { return passesFilters(l, filters); });
   }
 
-  /* Side-by-side comparison rows for a table. */
-  function compareRows(listings, opts) {
+  /* Why a listing was eliminated by the deal-breaker filters.
+   * Returns [] when it passes. One plain-English reason per missed filter. */
+  function filterReasons(l, filters) {
+    var f = filters || blankFilters();
+    var reasons = [];
+    if (num(f.minBeds, 0) > 0 && num(l.beds, 0) < num(f.minBeds, 0)) {
+      reasons.push(num(l.beds, 0) + ' beds < ' + num(f.minBeds, 0) + ' required');
+    }
+    if (num(f.maxCommuteMin, 0) > 0 && num(l.commuteMin, 0) > num(f.maxCommuteMin, 0)) {
+      reasons.push(num(l.commuteMin, 0) + ' min commute > ' + num(f.maxCommuteMin, 0) + ' min max');
+    }
+    var have = {};
+    (l.amenities || []).forEach(function (a) { have[a] = true; });
+    (f.required || []).forEach(function (a) {
+      if (!have[a]) reasons.push('missing amenity: ' + a);
+    });
+    if (f.petFriendly && !have['pet friendly']) reasons.push('not pet friendly');
+    return reasons;
+  }
+
+  /* Move-in cash: first month's rent + one-time fees + security deposit.
+   * An unset/0 deposit is assumed to equal one month's rent (the common case). */
+  function moveInCost(l) {
+    var rent = num(l.rent, 0);
+    var fees = num(l.fees, 0);
+    var dep = num(l.deposit, 0);
+    var deposit = dep > 0 ? dep : rent;
+    var total = rent + fees + deposit;
+    function r2(n) { return Math.round(n * 100) / 100; }
+    return { rent: r2(rent), fees: r2(fees), deposit: r2(deposit),
+             total: r2(total), assumedDeposit: dep <= 0 };
+  }
+
+  /* Affordability vs monthly income: the classic 30%-of-income rule, applied
+   * to the TRUE monthly cost (not the listed rent). Returns null when income
+   * is 0/unknown. status: 'good' (≤30%) | 'stretch' (≤40%) | 'over' (>40%). */
+  function affordability(l, opts, income) {
+    var inc = num(income, 0);
+    if (inc <= 0) return null;
+    var total = trueCost(l, opts).total;
+    var ratio = total / inc;
+    function r3(n) { return Math.round(n * 1000) / 1000; }
+    return {
+      ratio: r3(ratio),
+      pct: Math.round(ratio * 1000) / 10,
+      status: ratio <= 0.30 ? 'good' : ratio <= 0.40 ? 'stretch' : 'over'
+    };
+  }
+
+  /* Side-by-side comparison rows for a table.
+   * income (optional): when > 0, adds a "Share of income" row. */
+  function compareRows(listings, opts, income) {
     var scored = {};
     score(listings, {}, opts).forEach(function (s) { scored[s.id] = s; });
     function row(label, fn) {
       return { label: label, values: listings.map(fn) };
     }
-    return [
+    var rows = [
       row('Monthly rent', function (l) { return money(l.rent); }),
       row('True monthly cost', function (l) { return money(scored[l.id].cost.total); }),
+      row('Move-in cash needed', function (l) { return money(moveInCost(l).total); }),
       row('True cost / sq ft', function (l) {
         var sq = num(l.sqft, 0);
         return sq > 0 ? money(scored[l.id].cost.total / sq) : '—';
@@ -220,6 +273,13 @@
       row('Amenities', function (l) { return String((l.amenities || []).length); }),
       row('Overall score', function (l) { return scored[l.id].score + ' / 100'; })
     ];
+    if (num(income, 0) > 0) {
+      rows.splice(3, 0, row('Share of income', function (l) {
+        var a = affordability(l, opts, income);
+        return a ? a.pct + '%' : '—';
+      }));
+    }
+    return rows;
   }
 
   function escapeCsvCell(v) {
@@ -233,7 +293,7 @@
     var ranked = rank(listings, weights, opts);
     var rows = [[
       'rank', 'name', 'address', 'rent', 'fees_monthly', 'utilities',
-      'commute_cost', 'true_monthly_cost', 'sqft', 'beds', 'baths',
+      'commute_cost', 'true_monthly_cost', 'movein_cash', 'sqft', 'beds', 'baths',
       'commute_min', 'commute_mode', 'amenities', 'score', 'pros', 'cons',
       'lease_months'
     ]];
@@ -241,7 +301,7 @@
       var l = r.listing, c = r.cost;
       rows.push([
         r.rank, l.name, l.address || '', c.rent, c.feesMonthly, c.utilities,
-        c.commute, c.total, num(l.sqft, 0), l.beds, l.baths,
+        c.commute, c.total, moveInCost(l).total, num(l.sqft, 0), l.beds, l.baths,
         num(l.commuteMin, 0), l.commuteMode, (l.amenities || []).join('; '),
         r.score, l.pros || '', l.cons || '',
         c.leaseMonths
@@ -311,6 +371,9 @@
     blankFilters: blankFilters,
     passesFilters: passesFilters,
     filterListings: filterListings,
+    filterReasons: filterReasons,
+    moveInCost: moveInCost,
+    affordability: affordability,
     leaseMonthsOf: leaseMonthsOf
   };
 }));

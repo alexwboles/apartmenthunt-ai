@@ -18,8 +18,10 @@ ApartmentHunt AI runs **100% locally in your browser**:
 - **Shortlist CSV export** — download listings with true costs, breakdowns, and scores.
 - **Sort control** — re-order the shortlist by best match, lowest true cost, most space, shortest commute, or best value ($/sq ft) — the comparison table follows.
 - **Budget guardrail** — set a max true monthly cost; listings over it get an *Over budget* badge.
-- **Deal-breaker filters** — hard filters (min bedrooms, max commute, required amenities, pet-friendly) that remove non-starters from the ranking no matter their score; a note shows how many are hidden.
+- **Deal-breaker filters** — hard filters (min bedrooms, max commute, required amenities, pet-friendly) that remove non-starters from the ranking no matter their score; a note shows how many are hidden, and "Show why" reveals eliminated listings with the exact reason each one missed.
 - **Lease-term amortization** — one-time move-in fees spread over 6, 12, or 24 months, your choice; the CSV records which term was used.
+- **Affordability (30% rule)** — enter your monthly income and every listing gets an affordability badge: true cost as a share of income, rated good (≤30%) / stretch (≤40%) / over — plus a "Share of income" row in the comparison table.
+- **Move-in cash estimator** — first month's rent + one-time fees + security deposit (blank deposit assumes one month's rent), shown on every card, in the comparison table, and in the CSV export.
 - **Duplicate listing** — clone a listing as a starting point for a similar unit.
 - **Reset weights** — one click restores the default priority sliders.
 Sample listings included so you can see scoring in action before entering your own.

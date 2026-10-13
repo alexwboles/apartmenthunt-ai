@@ -7,6 +7,7 @@
   var LS_OPT = 'apthunt.opts.v1';
   var LS_BUDGET = 'apthunt.budget.v1';
   var sortKey = 'score';
+  var showHidden = false;
 
   function load(k, fb) {
     try { var raw = localStorage.getItem(k); if (raw) return JSON.parse(raw); }
@@ -37,7 +38,8 @@
     return {
       commuteCostPerMile: A.num(el('opt-cpm').value, 0.70),
       workDaysPerMonth: A.num(el('opt-days').value, 22),
-      leaseMonths: parseInt(el('opt-term').value, 10) || 12
+      leaseMonths: parseInt(el('opt-term').value, 10) || 12,
+      income: A.num(el('opt-income') ? el('opt-income').value : 0, 0)
     };
   }
 
@@ -100,12 +102,14 @@
     var filters = getFilters();
     var kept = A.filterListings(listings, filters);
     var hidden = listings.length - kept.length;
-    var ranked = A.sortRanked(A.rank(kept, getWeights(), getOpts()), sortKey);
+    var opts = getOpts();
+    var ranked = A.sortRanked(A.rank(kept, getWeights(), opts), sortKey);
     var box = el('ranked');
     box.innerHTML = '';
     if (hidden > 0) {
       box.innerHTML = '<div class="filter-note">' + hidden + ' listing' + (hidden === 1 ? '' : 's') +
-        ' hidden by your deal-breaker filters.</div>';
+        ' hidden by your deal-breaker filters. ' +
+        '<button class="linklike" id="toggle-hidden">' + (showHidden ? 'Hide them' : 'Show why') + '</button></div>';
     }
     if (!ranked.length) {
       box.innerHTML += hidden > 0 && listings.length
@@ -114,6 +118,7 @@
     }
     var budgetCap = A.num(el('budget-cap').value, 0);
     var flags = A.budgetFlags(ranked, budgetCap);
+    var income = opts.income;
     var winnerId = (ranked.length > 1 && sortKey === 'score' && ranked[0]) ? ranked[0].listing.id : null;
     ranked.forEach(function (r) {
       var card = document.createElement('div');
@@ -122,10 +127,15 @@
         ? ' <span class="best-pill">Best pick</span>' : '';
       var overBadge = flags.over[r.listing.id]
         ? ' <span class="budget-pill">Over budget</span>' : '';
+      var aff = A.affordability(r.listing, opts, income);
+      var affBadge = aff
+        ? ' <span class="afford-pill ' + aff.status + '" title="True cost is ' + aff.pct + '% of your monthly income (30% rule)">' +
+          aff.pct + '% of income</span>' : '';
+      var mi = A.moveInCost(r.listing);
       card.innerHTML =
         '<div class="card-top">' +
         '<div class="score-ring" style="--s:' + r.score + '"><span>' + Math.round(r.score) + '</span></div>' +
-        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + overBadge + '</h3>' +
+        '<div class="card-id"><h3>' + esc(r.listing.name) + medal + overBadge + affBadge + '</h3>' +
         '<div class="meta">' + esc(r.listing.address || 'no address') + ' · ' +
         r.listing.beds + 'bd/' + r.listing.baths + 'ba · ' +
         (r.listing.sqft || '?') + ' sqft · ' +
@@ -134,6 +144,9 @@
         '<div class="rank-chip">#' + r.rank + ' pick</div>' +
         '</div>' +
         costLine(r.listing, r.cost) +
+        '<div class="movein">Move-in cash: <b>' + A.money(mi.total) + '</b>' +
+        '<span class="meta"> — first rent ' + A.money(mi.rent) + ' + ' + A.money(mi.fees) + ' fees + ' +
+        A.money(mi.deposit) + ' deposit' + (mi.assumedDeposit ? ' (assumed = 1 mo rent)' : '') + '</span></div>' +
         '<div class="factors">' +
         factorHtml('Price', r.breakdown.price) +
         factorHtml('Space', r.breakdown.space) +
@@ -154,6 +167,23 @@
     box.querySelectorAll('[data-dup]').forEach(function (b) {
       b.addEventListener('click', function () { duplicateFrom(b.getAttribute('data-dup')); });
     });
+    var th = el('toggle-hidden');
+    if (th) th.addEventListener('click', function () {
+      showHidden = !showHidden;
+      render();
+    });
+
+    // eliminated by the deal-breakers — show why, on request
+    if (showHidden && hidden > 0) {
+      var eliminated = listings.filter(function (l) { return !A.passesFilters(l, filters); });
+      var ewrap = document.createElement('div');
+      ewrap.className = 'eliminated';
+      ewrap.innerHTML = '<h3>Out of the running</h3>' + eliminated.map(function (l) {
+        return '<div class="elim-card"><b>' + esc(l.name) + '</b><span>' +
+          A.filterReasons(l, filters).map(esc).join(' · ') + '</span></div>';
+      }).join('');
+      box.appendChild(ewrap);
+    }
 
     // comparison table (follows the active sort)
     var thead = el('compare').querySelector('thead');
@@ -166,7 +196,7 @@
         return '<th' + (winnerId && l.id === winnerId ? ' class="win-col"' : '') + '>' + esc(l.name) + '</th>';
       }).join('');
       thead.appendChild(hr);
-      A.compareRows(ordered, getOpts()).forEach(function (r) {
+      A.compareRows(ordered, opts, income).forEach(function (r) {
         var tr = document.createElement('tr');
         tr.innerHTML = '<th>' + esc(r.label) + '</th>' + r.values.map(function (v, i) {
           return '<td' + (winnerId && ordered[i] && ordered[i].id === winnerId ? ' class="win-col"' : '') + '>' + esc(v) + '</td>';
@@ -197,6 +227,7 @@
     el('f-beds').value = l.beds || '';
     el('f-baths').value = l.baths || '';
     el('f-fees').value = l.fees || 0;
+    el('f-deposit').value = l.deposit || '';
     el('f-utils').value = l.utilities || 0;
     el('f-cmin').value = l.commuteMin || 0;
     el('f-cmiles').value = l.commuteMiles || 0;
@@ -226,6 +257,7 @@
       beds: A.num(el('f-beds').value, 0),
       baths: A.num(el('f-baths').value, 0),
       fees: A.num(el('f-fees').value, 0),
+      deposit: A.num(el('f-deposit').value, 0),
       utilities: A.num(el('f-utils').value, 0),
       commuteMin: A.num(el('f-cmin').value, 0),
       commuteMiles: A.num(el('f-cmiles').value, 0),
@@ -298,6 +330,7 @@
     var o = load(LS_OPT, { commuteCostPerMile: 0.70, workDaysPerMonth: 22, leaseMonths: 12 });
     el('opt-cpm').value = o.commuteCostPerMile; el('opt-days').value = o.workDaysPerMonth;
     el('opt-term').value = String(o.leaseMonths || 12);
+    if (el('opt-income')) el('opt-income').value = o.income || '';
     el('budget-cap').value = load(LS_BUDGET, '');
 
     // deal-breaker filters
@@ -368,6 +401,10 @@
         save(LS_OPT, getOpts());
         render();
       });
+    });
+    if (el('opt-income')) el('opt-income').addEventListener('input', function () {
+      save(LS_OPT, getOpts());
+      render();
     });
     syncLabels();
 

@@ -56,6 +56,8 @@
     </label>
     <h3>Budget guardrail</h3>
     <label class="field">Max true cost / mo ($)<input type="number" id="budget-cap" min="0" step="50" placeholder="e.g. 2600"></label>
+    <label class="field">Monthly income ($)<input type="number" id="opt-income" min="0" step="100" placeholder="e.g. 8000"></label>
+    <p class="rail-note">Set your income and every listing gets an affordability badge — true cost vs the 30%-of-income rule.</p>
     <p class="rail-note">Apartments whose true monthly cost tops your budget get an <b>Over budget</b> badge — the math doesn't lie.</p>
     <h3>Deal-breakers</h3>
     <p class="rail-note">Hard filters — anything that misses one is out of the running, no matter its score.</p>
@@ -119,7 +121,8 @@
         <label class="field">Square feet <input id="f-sqft" type="number" min="0" step="1" placeholder="950"></label>
         <label class="field">Bedrooms <input id="f-beds" type="number" min="0" step="0.5" placeholder="2"></label>
         <label class="field">Bathrooms <input id="f-baths" type="number" min="0" step="0.5" placeholder="2"></label>
-        <label class="field">One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, deposit (non-refundable part), broker fee — amortized over the lease term"></label>
+        <label class="field">One-time move-in fees ($) <input id="f-fees" type="number" min="0" step="1" value="0" title="Application, broker fee, etc. — amortized over the lease term"></label>
+        <label class="field">Security deposit ($) <input id="f-deposit" type="number" min="0" step="1" placeholder="one month's rent" title="Refundable deposit due at signing — blank assumes one month's rent"></label>
         <label class="field">Est. utilities / mo ($) <input id="f-utils" type="number" min="0" step="1" value="0" placeholder="140"></label>
         <label class="field">Commute, one-way (min) <input id="f-cmin" type="number" min="0" step="1" value="0" placeholder="35"></label>
         <label class="field">Commute, one-way (miles) <input id="f-cmiles" type="number" min="0" step="0.1" value="0" placeholder="14"></label>
